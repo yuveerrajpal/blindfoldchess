@@ -1,58 +1,73 @@
 import chess
-import random
+import chess.engine
+import sys
 
 
-def get_computer_move(board: chess.Board) -> chess.Move:
-    # day 1: random legal move. (we hook up stockfish on day 2)
-    legal_moves = list(board.legal_moves)
-    return random.choice(legal_moves)
+STOCKFISH_PATH = "stockfish"
 
 
 def main():
-    print("type moves in algebraic notation")
-    print("type 'show' to peek at the board. type 'quit' to exit.\n")
+    print("\n" + "=" * 35)
+    print("  BLINDFOLD CHESS: ENGINE EDITION  ")
+    print("=" * 35)
+    print("Type moves in SAN (e.g. d4, e4).")
+    print("Type 'show' to view, 'quit' to exit.\n")
 
     board = chess.Board()
 
-    while not board.is_game_over():
-        # player turn
-        user_input = input("your move: ").strip()
+    # engine
+    try:
+        engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+        # skill level - 0 to 20
+        engine.configure({"Skill Level": 5})
+    except FileNotFoundError:
+        print("Error: Stockfish not found.")
+        sys.exit(1)
 
-        if user_input.lower() == 'quit':
-            print("resigning. game over.")
-            break
+    try:
+        while not board.is_game_over():
+            user_input = input("your move: ").strip()
 
-        if user_input.lower() == 'show':
-            print("\n--- current board ---")
-            print(board)
-            print("---------------------\n")
-            continue
+            if user_input.lower() == 'quit':
+                print("Resigning. Game over.")
+                break
 
-        # parse and play user move
-        try:
-            move = board.parse_san(user_input)
-            board.push(move)
-        except ValueError:
-            print("invalid move or notation. try again.")
-            continue
+            if user_input.lower() == 'show':
+                print("\n--- current board ---")
+                print(board)
+                print("---------------------\n")
+                continue
 
-        if board.is_game_over():
-            break
+            try:
+                move = board.parse_san(user_input)
+                board.push(move)
+            except ValueError:
+                print("Invalid move or notation. Try again.")
+                continue
 
-        # computer turn
-        comp_move = get_computer_move(board)
-        comp_move_san = board.san(comp_move)  # get notation before pushing
-        board.push(comp_move)
+            if board.is_game_over():
+                break
 
-        print(f"computer plays: {comp_move_san}")
 
-        if board.is_check():
-            print("check!")
+            result = engine.play(board, chess.engine.Limit(time=0.5))
+            comp_move = result.move
 
-    # game end results
+            comp_move_san = board.san(comp_move)
+            board.push(comp_move)
+
+            print(f"Stockfish plays: {comp_move_san}")
+
+            if board.is_check():
+                print("Check!")
+
+    finally:
+
+        engine.quit()
+
+    # results
     if board.is_game_over():
         print("\n--- GAME OVER ---")
-        print(f"result: {board.result()}")
+        print(f"Result: {board.result()}")
         print(board)
 
 
