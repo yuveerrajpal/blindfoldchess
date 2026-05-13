@@ -2,34 +2,43 @@ import chess
 import chess.engine
 import sys
 
-
 STOCKFISH_PATH = "stockfish"
+BLUNDER_THRESHOLD = 200
+
+
+def get_evaluation(engine, board):
+
+    info = engine.analyse(board, chess.engine.Limit(time=0.1))
+
+    return info["score"].white().score(mate_score=10000)
 
 
 def main():
     print("\n" + "=" * 35)
-    print("  BLINDFOLD CHESS: ENGINE EDITION  ")
+    print("  BLINDFOLD CHESS: TACTICS COACH  ")
     print("=" * 35)
-    print("Type moves in SAN (e.g. d4, e4).")
-    print("Type 'show' to view, 'quit' to exit.\n")
+    print("type moves in SAN (e.g. d4, e4).")
+    print("type 'show' to view, 'quit' to exit.\n")
 
     board = chess.Board()
 
-    # engine
     try:
         engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
-        # skill level - 0 to 20
-        engine.configure({"Skill Level": 5})
+        engine.configure({"skill level": 5})
     except FileNotFoundError:
-        print("Error: Stockfish not found.")
+        print("error: stockfish not found.")
         sys.exit(1)
 
     try:
         while not board.is_game_over():
+
+            is_white_turn = board.turn == chess.WHITE
+            eval_before = get_evaluation(engine, board)
+
             user_input = input("your move: ").strip()
 
             if user_input.lower() == 'quit':
-                print("Resigning. Game over.")
+                print("resigned. game over.")
                 break
 
             if user_input.lower() == 'show':
@@ -42,18 +51,39 @@ def main():
                 move = board.parse_san(user_input)
                 board.push(move)
             except ValueError:
-                print("Invalid move or notation. Try again.")
+                print("invalid move or notation. try again.")
                 continue
 
             if board.is_game_over():
                 break
 
 
-            result = engine.play(board, chess.engine.Limit(time=0.5))
-            comp_move = result.move
+            eval_after = get_evaluation(engine, board)
 
-            comp_move_san = board.san(comp_move)
-            board.push(comp_move)
+
+            if is_white_turn:
+                eval_drop = eval_before - eval_after
+            else:
+                eval_drop = eval_after - eval_before
+
+
+            if eval_drop >= BLUNDER_THRESHOLD:
+                print(f"BLUNDER DETECTED@")
+                print(f"evaluation dropped by {eval_drop / 100:.2f} points.")
+                print("you missed a tactic or hung a piece.")
+
+                choice = input("type 'undo' to take it back, or hit enter to continue: ").strip()
+                if choice.lower() == 'undo':
+                    board.pop()  # Remove your bad move
+                    print("move undone. try again.\n")
+                    continue
+                else:
+                    continue
+
+
+            result = engine.play(board, chess.engine.Limit(time=0.5))
+            comp_move_san = board.san(result.move)
+            board.push(result.move)
 
             print(f"Stockfish plays: {comp_move_san}")
 
@@ -61,13 +91,11 @@ def main():
                 print("Check!")
 
     finally:
-
         engine.quit()
 
-    # results
     if board.is_game_over():
         print("\n--- GAME OVER ---")
-        print(f"Result: {board.result()}")
+        print(f"result: {board.result()}")
         print(board)
 
 
